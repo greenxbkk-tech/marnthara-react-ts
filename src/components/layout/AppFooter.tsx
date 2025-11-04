@@ -40,7 +40,7 @@ export const AppFooter: React.FC = () => {
         <div className="footer-actions">
           <QuickNavButton />
         </div>
-
+        
         <button
           className="footer-totals"
           id="discountBtn"
