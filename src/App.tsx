@@ -1,10 +1,9 @@
 // src/App.tsx
 // [UPDATED] เพิ่ม <Toaster /> (Container สำหรับ Toast)
+// NOTE: Removed subscription to entire uiStore to avoid unnecessary re-renders.
 
 import React from 'react';
-import { useUIStore } from './store/uiStore';
 import { Toaster } from 'react-hot-toast'; // [NEW] Import
-
 // (Imports: Layouts, Modals...)
 import { AppHeader } from './components/layout/AppHeader';
 import { AppFooter } from './components/layout/AppFooter';
@@ -12,10 +11,15 @@ import { CustomerCard } from './components/CustomerCard';
 import { RoomList } from './components/RoomList';
 // ... (Import Modals ทั้งหมด)
 
+/**
+ * Important change:
+ * - Do NOT destructure the whole uiStore here (e.g. `const { ... } = useUIStore()`).
+ *   That subscribes App to the entire UI store and may cause unnecessary re-renders / loops.
+ * - Individual components or modals should select only the state/actions they need.
+ */
 function App() {
-  // ... (โค้ด store และ handlers เดิม) ...
-  const { /* ... (Modal states) ... */ } = useUIStore();
-  // ... (handleItemTypeSelect handler) ...
+  // Removed: const { /* ... (Modal states) ... */ } = useUIStore();
+  // (handleItemTypeSelect handler) ...
 
   return (
     <>
@@ -35,7 +39,7 @@ function App() {
       <AppFooter />
 
       {/* 5. Modals */}
-      {/* ... (Render Modals ทั้งหมด) ... */}
+      {/* ... (Render Modals ทั้งหมด — let each modal use selectors to read its own flags/actions) */}
     </>
   );
 }
