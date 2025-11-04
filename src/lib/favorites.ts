@@ -1,8 +1,7 @@
 // src/lib/favorites.ts
 // [NEW] ย้าย Logic จาก favorites.js
 
-// [FIXED] เปลี่ยนเป็น 'import type' เพราะนำเข้าเฉพาะ Type/Interface
-import type { FavoritesData, Favorite } from '../store/types';
+import { FavoritesData, Favorite } from '../store/types';
 
 export const FAVORITES_KEY = 'marnthara.favorites.v4'; // (ใช้ Key เดิม)
 

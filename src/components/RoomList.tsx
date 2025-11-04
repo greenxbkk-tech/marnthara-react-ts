@@ -1,28 +1,47 @@
 // src/components/RoomList.tsx
+// [UPDATED] อัปเดตจาก Placeholder เป็นตัวจัดการ RoomCard จริง
+
 import React from 'react';
 import { useAppStore } from '../store/store';
+import { RoomCard } from './RoomCard/RoomCard';
+import { PlusCircle } from 'phosphor-react';
 
-/**
- * RoomList component
- * - ส่งออกเป็น named export { RoomList } เพื่อให้สอดคล้องกับ App.tsx
- * - export default ด้วยเผื่อที่อื่นยัง import แบบ default
- * - ใช้ any กับ state selector เพื่อหลีกเลี่ยงปัญหาชนิดที่ยังไม่ชัดเจนในโค้ดต้นฉบับ
- */
 export const RoomList: React.FC = () => {
-  const rooms = useAppStore((s: any) => s.rooms ?? []);
+  // [NEW] เลือกมาเฉพาะ ID ของห้อง
+  // นี่คือเทคนิคที่เสถียรที่สุด (Resilient)
+  // RoomList จะ re-render *เฉพาะ* เมื่อมีการ "เพิ่ม" หรือ "ลบ" ห้องเท่านั้น
+  const roomIds = useAppStore((state) => state.rooms.map(r => r.id));
+  const addRoom = useAppStore((state) => state.addRoom);
 
   return (
-    <section id="room-list" className="room-list">
-      {rooms.length > 0 ? (
-        rooms.map((room: any) => (
-          <div key={room.id} className="room-item">
-            <div className="room-name">{room.room_name ?? 'ห้อง (ไม่มีชื่อ)'}</div>
-            {/* เพิ่มข้อมูลอื่น ๆ ตามต้องการ เช่น สถานะ, รายการสินค้า ฯลฯ */}
+    <section id="room-list-container">
+      {/* 1. ส่วนแสดงผลรายการห้อง */}
+      <div className="room-list">
+        {roomIds.length > 0 ? (
+          roomIds.map((roomId) => (
+            // RoomCard แต่ละอันจะ "ฉลาด" พอที่จะดึงข้อมูลของตัวเอง
+            <RoomCard key={roomId} roomId={roomId} />
+          ))
+        ) : (
+          <div className="no-rooms-placeholder">
+            <p>(ยังไม่มีห้อง)</p>
+            <p>คลิก "เพิ่มห้อง" เพื่อเริ่มต้น</p>
           </div>
-        ))
-      ) : (
-        <div className="no-rooms">ยังไม่มีห้อง</div>
-      )}
+        )}
+      </div>
+
+      {/* 2. ปุ่มเพิ่มห้อง (ลอยอยู่ด้านล่าง) */}
+      <div className="add-room-footer">
+        <button
+          type="button"
+          className="btn btn-primary"
+          id="addRoomBtn"
+          onClick={addRoom}
+        >
+          <PlusCircle size={20} weight="regular" />
+          เพิ่มห้อง
+        </button>
+      </div>
     </section>
   );
 };

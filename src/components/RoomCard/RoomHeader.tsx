@@ -1,63 +1,119 @@
 // src/components/RoomCard/RoomHeader.tsx
-import React, { useState } from 'react';
+// [NEW] คอมโพเนนต์ส่วนหัว (Summary) ของ RoomCard
+
+import React, { useState, useEffect } from 'react';
+import { RoomData } from '../../store/types';
 import { useAppStore } from '../../store/store';
-import type { Room } from '../../store/store'; // Import Type จาก store
+import { CALC } from '../../lib/calculations';
+import { fmtTH } from '../../lib/utils';
+import {
+  CaretDown,
+  DotsThreeVertical,
+  Trash,
+  PauseCircle,
+  PlayCircle,
+  Copy,
+} from 'phosphor-react';
 
 interface RoomHeaderProps {
-  room: Room;
-  onToggle: (e: React.MouseEvent<HTMLElement>) => void;
+  room: RoomData;
 }
 
-export function RoomHeader({ room, onToggle }: RoomHeaderProps) {
-  
-  // เราจะใช้ Local State แค่ตอน "กำลังพิมพ์"
-  // แต่ค่าเริ่มต้นจะมาจาก prop โดยตรง
-  const [localName, setLocalName] = useState(room.room_name);
-  const updateRoomName = useAppStore(state => state.updateRoomName);
+export const RoomHeader: React.FC<RoomHeaderProps> = ({ room }) => {
+  // [NEW] ดึง Actions ที่เกี่ยวข้องกับ Room
+  const { updateRoom, deleteRoom, toggleRoomSuspension } = useAppStore(
+    (state) => ({
+      updateRoom: state.updateRoom,
+      deleteRoom: () => state.deleteRoom(room.id),
+      toggleRoomSuspension: () =>
+        state.updateRoom(room.id, { is_suspended: !room.is_suspended }),
+    })
+  );
 
-  // *** เราลบ useEffect ที่ทำให้เกิด Loop ออกไปแล้ว ***
-  // React จะอัปเดต localName ให้เองเมื่อ prop 'room' เปลี่ยน
-  // (ซึ่งมันจะเปลี่ยนเฉพาะตอนที่ข้อมูลเปลี่ยนจริงๆ เพราะเราใช้ shallow)
-  React.useEffect(() => {
-    // ซิงค์ local state ถ้า prop จาก store เปลี่ยน (เช่นการ Undo)
-    setLocalName(room.room_name);
+  // [NEW] Local state สำหรับจัดการ Input (กันการ re-render ทั้งแอปทุกครั้งที่พิมพ์)
+  const [localName, setLocalName] = useState(room.room_name);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // [NEW] ถ้า Prop (room.room_name) เปลี่ยนจากข้างนอก ให้อัปเดต local state
+  useEffect(() => {
+    if (room.room_name !== localName) {
+      setLocalName(room.room_name);
+    }
   }, [room.room_name]);
 
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalName(e.target.value);
-  };
-
+  // [NEW] Handler สำหรับอัปเดตชื่อใน Store (เมื่อ Blur)
   const handleNameBlur = () => {
-    // อัปเดต store เมื่อ blur (ประหยัด performance)
-    if (localName !== room.room_name) {
-      updateRoomName(room.id, localName);
+    if (localName.trim() !== room.room_name) {
+      updateRoom(room.id, { room_name: localName.trim() || 'ห้อง (ไม่มีชื่อ)' });
     }
   };
 
+  // [NEW] คำนวณสรุปย่อของห้อง (Room Brief)
+  const roomTotal = room.items.reduce(
+    (sum, item) => sum + CALC.calculateItemPrice(item).total,
+    0
+  );
+  const brief = `${room.items.length} รายการ | ${fmtTH(roomTotal)} บาท`;
+
   return (
-    <summary onClick={onToggle}>
-      <h2>
-        <i className="ph-bold ph-map-pin"></i>
-        {/* แสดงผลจาก Local State และอัปเดต Store ตอน onBlur */}
-        <input
-          type="text"
-          name="room_name"
-          className="room-name-input"
-          placeholder="ระบุชื่อห้อง..."
-          value={localName}
-          onChange={handleNameChange}
-          onBlur={handleNameBlur}
-          onClick={e => e.stopPropagation()} // ป้องกัน <details> ปิดตอนคลิก input
-        />
-      </h2>
-      <span className="room-summary-controls">
-        {/* (คุณต้องเพิ่ม Logic การคำนวณ brief เอง) */}
+    <summary>
+      <div className="room-header-controls">
+        <div className="form-group">
+          {/* [NEW] ใช้ Local state 'localName' และอัปเดต Store 'onBlur' */}
+          <input
+            type="text"
+            className="room-name-input"
+            aria-label="ชื่อห้อง"
+            placeholder="ตั้งชื่อห้อง"
+            value={localName}
+            onChange={(e) => setLocalName(e.target.value)}
+            onBlur={handleNameBlur}
+            // (ป้องกัน <details> สลับการพับ/กาง ตอนคลิก Input)
+            onClick={(e) => e.preventDefault()} 
+          />
+        </div>
+
+        {/* --- Room Options Menu (CSS จาก main.css) --- */}
+        <div className="room-options-container">
+          <button
+            type="button"
+            className="btn-icon"
+            title="ตัวเลือกห้อง"
+            onClick={(e) => {
+              e.preventDefault(); // ป้องกัน <details>
+              setIsMenuOpen(!isMenuOpen);
+            }}
+          >
+            <DotsThreeVertical size={24} weight="bold" />
+          </button>
+          
+          <div className={`room-options-menu ${isMenuOpen ? 'show' : ''}`}>
+            <a href="#" onClick={(e) => { e.preventDefault(); toggleRoomSuspension(); setIsMenuOpen(false); }}>
+              {room.is_suspended ? (
+                <PlayCircle size={20} />
+              ) : (
+                <PauseCircle size={20} />
+              )}
+              {room.is_suspended ? 'เปิดใช้งานห้อง' : 'ระงับการคำนวณ'}
+            </a>
+            {/* (Duplicate Room - Coming Soon) */}
+            {/* <a href="#"><Copy size={20} /> คัดลอกห้อง</a> */}
+            <hr />
+            <a href="#" className="danger" onClick={(e) => { e.preventDefault(); deleteRoom(); setIsMenuOpen(false); }}>
+              <Trash size={20} />
+              ลบห้องนี้
+            </a>
+          </div>
+        </div>
+        {/* --- End Menu --- */}
+      </div>
+
+      <div className="room-summary-controls">
         <span className="room-brief" data-room-brief>
-          {room.items.length} รายการ
+          {brief}
         </span>
-        <i className="ph-bold ph-caret-down expand-icon"></i>
-      </span>
+        <CaretDown size={24} weight="regular" className="expand-icon" />
+      </div>
     </summary>
   );
-}
+};

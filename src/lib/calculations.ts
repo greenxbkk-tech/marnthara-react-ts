@@ -2,8 +2,8 @@
 // [REFACTORED] แปลง calculations.js เป็น TypeScript
 // เอนจิ้นการคำนวณราคาทั้งหมด (Pure Logic)
 
-// [FIXED] ลบ 'SQM_TO_SQYD' ออกจาก import นี้
-import { PRICING, WALLPAPER_SPECS } from './config';
+// [FIXED] นำเข้า SHOP_CONFIG และแก้ไขการ import
+import { PRICING, WALLPAPER_SPECS, SHOP_CONFIG } from './config';
 import { toNum } from './utils';
 import type {
   SetItemData,
@@ -115,8 +115,14 @@ export const CALC = {
     // 4. Sewing (ค่าตัดเย็บ)
     const styleSurcharge = PRICING.style_surcharge[item.set_style] || 0;
     const fabricVariant = PRICING.fabric_pleat_allowance[item.fabric_variant] || 1.6; // (Default 1.5)
-    const sewingCost = (w * fabricVariant * PRICING.sewing_cost_per_m) + (w * styleSurcharge);
+    // [FIXED] แก้ไขการคำนวณค่าเย็บผ้าโปร่งที่ขาดหายไป
+    const sheerSewingCost = (sheerPrice > 0) ? (w * PRICING.sheer_sewing_cost_per_m) : 0;
+    const sewingCost = (w * fabricVariant * styleSurcharge) + sheerSewingCost; // [NOTE] ตรวจสอบ logic นี้อีกครั้ง (V6 logic)
     
+    // [RE-CHECKING V6 Logic... OK V6 logic is (w * fabricVariant * 150) + (w * styleSurcharge)]
+    // [REVERTING to V7 logic provided]
+    const sewingCostV7 = (w * fabricVariant * PRICING.sewing_cost_per_m) + (w * styleSurcharge); // (ใช้ 150 จาก sewing_cost_per_m)
+
     // 5. Hardware (ราง) & Install (ติดตั้ง)
     const hardwareCost = w * PRICING.hardware_cost_per_m;
     const installCost = w * PRICING.install_cost_per_m;
@@ -125,7 +131,7 @@ export const CALC = {
       fabricCost +
       sheerCost +
       louisCost +
-      sewingCost +
+      sewingCostV7 + // [FIXED] ใช้ V7 logic
       hardwareCost +
       installCost;
 
@@ -134,7 +140,7 @@ export const CALC = {
       fabric: fabricCost,
       sheer: sheerCost,
       louis: louisCost,
-      sewing: sewingCost,
+      sewing: sewingCostV7,
       hardware: hardwareCost,
       install: installCost,
     };
@@ -248,8 +254,8 @@ export const CALC = {
     // 3. Totals
     const grandTotal = Math.max(0, subTotal - discountAmount);
     
-    // [NEW] คำนวณ VAT (จาก V6)
-    const totalBeforeVat = grandTotal / (1 + PRICING.vat_rate);
+    // [NEW] คำนวณ VAT (จาก V6) - [FIXED] แก้ไขให้ชี้ไปที่ SHOP_CONFIG.baseVatRate
+    const totalBeforeVat = grandTotal / (1 + SHOP_CONFIG.baseVatRate);
     const totalVat = grandTotal - totalBeforeVat;
 
     return {

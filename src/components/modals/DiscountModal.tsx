@@ -1,12 +1,12 @@
 // src/components/modals/DiscountModal.tsx
-// [NEW] Modal สำหรับจัดการส่วนลด (แทนที่ Logic จาก ui-modals.js)
+// [FIXED] แก้ไข Loop นรก โดยการใช้ Atomic Selection
 
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/store';
 import { DiscountData } from '../../store/types';
 import { toNum } from '../../lib/utils';
-import { ModalBase } from './ModalBase'; // [NEW] ใช้ Wrapper
-import { Tag, CurrencyBtc } from 'phosphor-react'; // (ใช้ Btc แทน Baht)
+import { ModalBase } from './ModalBase';
+import { Tag, CurrencyBtc } from 'phosphor-react';
 
 interface DiscountModalProps {
   isOpen: boolean;
@@ -17,23 +17,28 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  // [NEW] ดึง State และ Action จาก Zustand
-  const { discount, updateDiscount } = useAppStore((state) => ({
-    discount: state.discount,
-    updateDiscount: state.updateDiscount,
-  }));
+  // [FIXED] แก้ไข Loop นรก:
+  // ดึงค่า Primitive (type, value) มาตรงๆ (Atomic Selection)
+  // ค่าเหล่านี้จะ "นิ่ง" และจะเปลี่ยนก็ต่อเมื่อค่าใน Store เปลี่ยนจริงๆ เท่านั้น
+  const globalDiscountType = useAppStore((state) => state.discount.type);
+  const globalDiscountValue = useAppStore((state) => state.discount.value);
+  
+  // Action จะนิ่งเสมอ
+  const updateDiscount = useAppStore((state) => state.updateDiscount);
 
-  // [NEW] Local state สำหรับจัดการ Form ภายใน Modal
-  const [localType, setLocalType] = useState(discount.type);
-  const [localValue, setLocalValue] = useState(discount.value);
+  // [FIXED] Local state สำหรับจัดการ Form ภายใน Modal
+  // (ใช้ค่าที่ดึงมาแบบ Atomic เป็นค่าเริ่มต้น)
+  const [localType, setLocalType] = useState(globalDiscountType);
+  const [localValue, setLocalValue] = useState(globalDiscountValue);
 
-  // [NEW] เมื่อ Modal เปิด (isOpen) ให้ซิงค์ Local state กับ Global state
+  // [FIXED] เมื่อ Modal เปิด (isOpen) ให้ซิงค์ Local state กับ Global state
+  // (Dependencies ตอนนี้เป็น Primitive ที่ "นิ่ง" แล้ว)
   useEffect(() => {
     if (isOpen) {
-      setLocalType(discount.type);
-      setLocalValue(discount.value);
+      setLocalType(globalDiscountType);
+      setLocalValue(globalDiscountValue);
     }
-  }, [isOpen, discount]);
+  }, [isOpen, globalDiscountType, globalDiscountValue]); // <-- ปลอดภัยแล้ว
 
   // [NEW] Handler สำหรับบันทึก (อัปเดต Global state)
   const handleSave = () => {

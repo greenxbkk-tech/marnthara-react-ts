@@ -1,7 +1,7 @@
 // src/components/modals/FavoritesManagerModal.tsx
-// [NEW] Modal หลักสำหรับจัดการรายการโปรด
+// [FIXED] แก้ไข Error การ Import และปรับปรุงการใช้ useState
 
-import React, 'react';
+import React, { useState } from 'react'; // [FIXED] แก้ไขการ import
 import { useAppStore } from '../../store/store';
 import { useUIStore } from '../../store/uiStore';
 import { FavoritesData } from '../../store/types';
@@ -28,9 +28,9 @@ export const FavoritesManagerModal: React.FC<{ isOpen: boolean; onClose: () => v
   
   const { openFavFormModal } = useUIStore();
 
-  // [NEW] Local state สำหรับจัดการ UI ภายใน
-  const [activeType, setActiveType] = React.useState<keyof FavoritesData>('fabric');
-  const [selectedCode, setSelectedCode] = React.useState<string | null>(null);
+  // [UPDATED] Local state (ใช้ useState ที่ import มาโดยตรง)
+  const [activeType, setActiveType] = useState<keyof FavoritesData>('fabric');
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
 
   const favTypes = Object.keys(favorites) as (keyof FavoritesData)[];
   const activeList = favorites[activeType] || [];
