@@ -8,16 +8,14 @@ import { fmtTH } from '../../lib/utils';
 import { Compass } from 'phosphor-react';
 import { shallow } from 'zustand/shallow';
 
-// [UPDATED] เชื่อมปุ่ม QuickNav กับ uiStore
+// QuickNav button component (uses uiStore action)
 const QuickNavButton: React.FC = () => {
-  // [NEW] ดึง action จาก uiStore
   const openQuickNavModal = useUIStore((state) => state.openQuickNavModal);
-  
   return (
     <button
       className="btn btn-secondary"
       id="quickNavBtn"
-      onClick={openQuickNavModal} // [UPDATED]
+      onClick={openQuickNavModal}
     >
       <Compass size={20} weight="regular" />
       <span>นำทางด่วน</span>
@@ -26,9 +24,9 @@ const QuickNavButton: React.FC = () => {
 };
 
 export const AppFooter: React.FC = () => {
-  // --- IMPORTANT FIX ---
-  // ย้ายการคำนวณ totals ลงใน selector เพื่อให้ zustand เรียก getSnapshot ครั้งเดียว
-  // และใช้ shallow เป็น equality function เพื่อป้องกัน re-render ถ้าผลลัพธ์ totals ไม่เปลี่ยน
+  // IMPORTANT:
+  // - Move derived calculation into the selector so zustand caches getSnapshot properly.
+  // - Use shallow equality to avoid re-render when numeric totals don't change.
   const { subTotal, discountAmount, grandTotal } = useAppStore(
     (state) => CALC.calculateSummaryTotals(state.rooms, state.discount),
     shallow
@@ -42,7 +40,7 @@ export const AppFooter: React.FC = () => {
         <div className="footer-actions">
           <QuickNavButton />
         </div>
-        
+
         <button
           className="footer-totals"
           id="discountBtn"
@@ -67,3 +65,5 @@ export const AppFooter: React.FC = () => {
     </footer>
   );
 };
+
+export default AppFooter;
