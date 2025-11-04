@@ -1,16 +1,12 @@
 // src/store/store.ts
-// [UPDATED] ไฟล์สมองที่สมบูรณ์ พร้อม "นักบัญชี" และ Actions ทั้งหมด
-
+// [UPDATED] Fix infinite update loop by exposing primitive customer_* fields
+// and making updateCustomer accept both (field, value) and (partialObj).
 import { create } from 'zustand';
-// [CRITICAL FIX] แก้ไข Path การ Import ที่เป็นต้นตอของปัญหา
-// 'temporal' มาจาก 'zundo'
-// 'devtools' และ 'persist' มาจาก 'zustand/middleware'
 import { temporal } from 'zundo';
 import { devtools, persist } from 'zustand/middleware';
 import { APP_VERSION, STORAGE_KEY } from '../lib/config';
 import { shallow } from 'zustand/shallow';
 import { CALC } from '../lib/calculations';
-// [NEW] Import types และ helpers ที่จำเป็น
 import type {
   ItemData,
   ItemType,
@@ -18,7 +14,8 @@ import type {
   DiscountData,
   AppPayload,
   FavoritesData,
-  FullAppState, // (คุณต้องไปเพิ่ม props ใน types.ts ด้วย)
+  FullAppState,
+  CustomerData,
 } from './types';
 import {
   getFavoritesFromStorage,
@@ -27,53 +24,89 @@ import {
   deleteFavorite,
 } from '../lib/favorites';
 
-// --- สร้าง Store ---
 export const useAppStore = create<FullAppState>()(
   devtools(
     temporal(
       persist(
         (set, get) => ({
-          // --- ค่าเริ่มต้นของ State ---
+          // --- App meta ---
           app_version: APP_VERSION,
+
+          // --- Customer stored as object (for compatibility) ---
           customer: {
             customer_name: '',
             customer_phone: '',
             customer_address: '',
             customer_card_open: true,
           },
+
+          // --- Also expose flat primitives so selectors can pick stable primitives ---
+          customer_name: '',
+          customer_phone: '',
+          customer_address: '',
+          customer_card_open: true,
+
+          // --- Discount / rooms / favorites / totals ---
           discount: { type: 'amount', value: 0 },
           rooms: [],
-          favorites: getFavoritesFromStorage(), // [NEW] โหลด Favorites จาก Storage
+          favorites: getFavoritesFromStorage(),
 
-          // [NEW] "ไวท์บอร์ด" สำหรับเก็บยอดรวม
           subTotal: 0,
           discountAmount: 0,
           grandTotal: 0,
 
-          // --- [INTERNAL] "นักบัญชี" ---
+          // --- Internal: recalc totals ---
           _recalculateTotals: () => {
             const { rooms, discount } = get();
             const { subTotal, discountAmount, grandTotal } =
               CALC.calculateSummaryTotals(rooms, discount);
+            // set only numeric totals to avoid changing object shapes frequently
             set({ subTotal, discountAmount, grandTotal });
           },
 
-          // --- Actions (Customer) ---
-          updateCustomer: (field, value) => {
-            set((state) => ({
-              customer: { ...state.customer, [field]: value },
-            }));
-          },
-          toggleCustomerCard: () => {
-            set((state) => ({
-              customer: {
-                ...state.customer,
-                customer_card_open: !state.customer.customer_card_open,
-              },
-            }));
+          // --- Actions: Customer ---
+          /**
+           * updateCustomer can be used in two ways:
+           *  - updateCustomer('customer_name', 'Somchai')
+           *  - updateCustomer({ customer_name: 'Somchai', customer_phone: '081...' })
+           *
+           * It updates both customer (object) and the flat primitives to keep selectors stable.
+           */
+          updateCustomer: (fieldOrObj: string | Partial<CustomerData>, value?: any) => {
+            if (typeof fieldOrObj === 'string') {
+              const field = fieldOrObj as keyof CustomerData;
+              const payload = { [field]: value } as Partial<CustomerData>;
+              set((state) => ({
+                customer: { ...state.customer, ...payload },
+                // update flat primitives if present in payload
+                ...(payload.customer_name !== undefined ? { customer_name: payload.customer_name } : {}),
+                ...(payload.customer_phone !== undefined ? { customer_phone: payload.customer_phone } : {}),
+                ...(payload.customer_address !== undefined ? { customer_address: payload.customer_address } : {}),
+                ...(payload.customer_card_open !== undefined ? { customer_card_open: payload.customer_card_open } : {}),
+              }));
+            } else {
+              const payload = fieldOrObj as Partial<CustomerData>;
+              set((state) => ({
+                customer: { ...state.customer, ...payload },
+                ...(payload.customer_name !== undefined ? { customer_name: payload.customer_name } : {}),
+                ...(payload.customer_phone !== undefined ? { customer_phone: payload.customer_phone } : {}),
+                ...(payload.customer_address !== undefined ? { customer_address: payload.customer_address } : {}),
+                ...(payload.customer_card_open !== undefined ? { customer_card_open: payload.customer_card_open } : {}),
+              }));
+            }
           },
 
-          // --- Actions (Room) ---
+          toggleCustomerCard: () => {
+            set((state) => {
+              const open = !state.customer.customer_card_open;
+              return {
+                customer: { ...state.customer, customer_card_open: open },
+                customer_card_open: open,
+              };
+            });
+          },
+
+          // --- Actions: Room ---
           addRoom: () => {
             const newRoom: RoomData = {
               id: `room-${Date.now()}`,
@@ -83,27 +116,26 @@ export const useAppStore = create<FullAppState>()(
               room_defaults: {},
               items: [],
             };
-            set((state) => ({
-              rooms: [...state.rooms, newRoom],
-            }));
-            // (การเพิ่มห้องเปล่า ไม่กระทบราคา ไม่ต้องเรียกนักบัญชี)
+            set((state) => ({ rooms: [...state.rooms, newRoom] }));
           },
-          updateRoomName: (roomId, newName) => {
+
+          updateRoomName: (roomId: string, newName: string) => {
             set((state) => ({
               rooms: state.rooms.map((room) =>
                 room.id === roomId ? { ...room, room_name: newName } : room
               ),
             }));
           },
-          toggleRoomOpen: (roomId) => {
+
+          toggleRoomOpen: (roomId: string) => {
             set((state) => ({
               rooms: state.rooms.map((room) =>
                 room.id === roomId ? { ...room, is_open: !room.is_open } : room
               ),
             }));
           },
+
           toggleRoomSuspended: (roomId: string) => {
-            // (Action นี้จำเป็น)
             set((state) => ({
               rooms: state.rooms.map((room) =>
                 room.id === roomId
@@ -111,41 +143,32 @@ export const useAppStore = create<FullAppState>()(
                   : room
               ),
             }));
-            get()._recalculateTotals(); // "ตระโกนเรียก"
+            get()._recalculateTotals();
           },
+
           deleteRoom: (roomId: string) => {
             if (!window.confirm('คุณต้องการลบห้องนี้และทุกรายการในห้อง?')) return;
-            set((state) => ({
-              rooms: state.rooms.filter((room) => room.id !== roomId),
-            }));
-            get()._recalculateTotals(); // "ตระโกนเรียก"
+            set((state) => ({ rooms: state.rooms.filter((room) => room.id !== roomId) }));
+            get()._recalculateTotals();
           },
 
-          // --- Actions (Item) ---
+          // --- Actions: Item ---
           addItem: (roomId: string, type: ItemType) => {
-            // (ตรรกะการสร้าง Item ใหม่ - คุณต้องไปเพิ่มรายละเอียด default)
             const newItem: ItemData = {
               id: `item-${Date.now()}`,
-              type: type,
+              type,
               is_suspended: false,
               is_details_open: false,
-              // (เพิ่ม default fields ตาม type)
             } as ItemData;
-
             set((state) => ({
               rooms: state.rooms.map((room) =>
-                room.id === roomId
-                  ? { ...room, items: [...room.items, newItem] }
-                  : room
+                room.id === roomId ? { ...room, items: [...room.items, newItem] } : room
               ),
             }));
-            get()._recalculateTotals(); // "ตระโกนเรียก"
+            get()._recalculateTotals();
           },
-          updateItem: (
-            roomId: string,
-            itemId: string,
-            data: Partial<ItemData>
-          ) => {
+
+          updateItem: (roomId: string, itemId: string, data: Partial<ItemData>) => {
             set((state) => ({
               rooms: state.rooms.map((room) =>
                 room.id === roomId
@@ -158,101 +181,98 @@ export const useAppStore = create<FullAppState>()(
                   : room
               ),
             }));
-            get()._recalculateTotals(); // "ตระโกนเรียก"
+            get()._recalculateTotals();
           },
+
           deleteItem: (roomId: string, itemId: string) => {
-            // (ถ้าต้องการ confirm ให้ทำที่ ItemHeader.tsx)
             set((state) => ({
               rooms: state.rooms.map((room) =>
                 room.id === roomId
-                  ? {
-                      ...room,
-                      items: room.items.filter((item) => item.id !== itemId),
-                    }
+                  ? { ...room, items: room.items.filter((item) => item.id !== itemId) }
                   : room
               ),
             }));
-            get()._recalculateTotals(); // "ตระโกนเรียก"
+            get()._recalculateTotals();
           },
+
           duplicateItem: (roomId: string, itemId: string) => {
             set((state) => {
               const room = state.rooms.find((r) => r.id === roomId);
               const itemToCopy = room?.items.find((i) => i.id === itemId);
               if (!room || !itemToCopy) return state;
-
               const newItem = { ...itemToCopy, id: `item-${Date.now()}` };
-
-              return {
-                rooms: state.rooms.map((r) =>
-                  r.id === roomId ? { ...r, items: [...r.items, newItem] } : r
-                ),
-              };
+              return { rooms: state.rooms.map((r) => (r.id === roomId ? { ...r, items: [...r.items, newItem] } : r)) };
             });
-            get()._recalculateTotals(); // "ตระโกนเรียก"
-          },
-          changeItemType: (
-            roomId: string,
-            itemId: string,
-            newType: ItemType
-          ) => {
-            // (ตรรกะการแปลง Item type - คุณต้องเพิ่มเอง)
-            // ...
-            get()._recalculateTotals(); // "ตระโกนเรียก"
+            get()._recalculateTotals();
           },
 
-          // --- Actions (Discount) ---
+          changeItemType: (roomId: string, itemId: string, newType: ItemType) => {
+            // implement conversion logic if needed
+            get()._recalculateTotals();
+          },
+
+          // --- Discount ---
           updateDiscount: (newDiscount: DiscountData) => {
             set({ discount: newDiscount });
-            get()._recalculateTotals(); // "ตระโกนเรียก"
+            get()._recalculateTotals();
           },
 
-          // --- Actions (Favorites) ---
-          addFavorite: (type, code, price) => {
-            const newFavorites = addOrUpdateFavorite(
-              get().favorites,
-              type,
-              code,
-              price
-            );
+          // --- Favorites ---
+          addFavorite: (type: string, code: string, price: number) => {
+            const newFavorites = addOrUpdateFavorite(get().favorites, type, code, price);
             set({ favorites: newFavorites });
             saveFavoritesToStorage(newFavorites);
-            // (ไม่กระทบราคา ไม่ต้องเรียกนักบัญชี)
           },
-          deleteFavorite: (type, code) => {
+
+          deleteFavorite: (type: string, code: string) => {
             const newFavorites = deleteFavorite(get().favorites, type, code);
             set({ favorites: newFavorites });
             saveFavoritesToStorage(newFavorites);
           },
 
-          // --- Actions (Data Import/Export) ---
+          // --- Import/Export ---
           loadState: (payload: AppPayload) => {
+            const customerPayload = {
+              customer_name: payload.customer_name,
+              customer_phone: payload.customer_phone,
+              customer_address: payload.customer_address,
+              customer_card_open: payload.customer_card_open,
+            };
             set({
-              customer: {
-                customer_name: payload.customer_name,
-                customer_phone: payload.customer_phone,
-                customer_address: payload.customer_address,
-                customer_card_open: payload.customer_card_open,
-              },
+              customer: { ...get().customer, ...customerPayload },
+              customer_name: payload.customer_name,
+              customer_phone: payload.customer_phone,
+              customer_address: payload.customer_address,
+              customer_card_open: payload.customer_card_open,
               discount: payload.discount,
               rooms: payload.rooms,
             });
-            get()._recalculateTotals(); // "ตระโกนเรียก" หลังโหลด
+            get()._recalculateTotals();
           },
+
           importFavorites: (favorites: FavoritesData) => {
             set({ favorites });
             saveFavoritesToStorage(favorites);
           },
+
           resetState: () => {
             if (!window.confirm('คุณต้องการลบข้อมูลทั้งหมดและเริ่มใหม่?')) return;
-            // (ตรรกะการ Reset state กลับค่าเริ่มต้น)
+            // reset both object and flat fields
             set({
               customer: {
-                /* ...ค่าเริ่มต้น... */
+                customer_name: '',
+                customer_phone: '',
+                customer_address: '',
+                customer_card_open: true,
               },
+              customer_name: '',
+              customer_phone: '',
+              customer_address: '',
+              customer_card_open: true,
               discount: { type: 'amount', value: 0 },
               rooms: [],
             });
-            get()._recalculateTotals(); // "ตระโกนเรียก"
+            get()._recalculateTotals();
           },
         }),
         {
@@ -261,9 +281,9 @@ export const useAppStore = create<FullAppState>()(
           migrate: (persistedState: any, version: number) => {
             return persistedState;
           },
-          // [NEW] คำนวณยอดรวมครั้งแรกเมื่อโหลดข้อมูลจาก localStorage
           onRehydrateStorage: () => (state) => {
-            if (state) {
+            // when store rehydrates from storage, recalc totals
+            if (state && typeof state._recalculateTotals === 'function') {
               state._recalculateTotals();
             }
           },
@@ -272,11 +292,26 @@ export const useAppStore = create<FullAppState>()(
       {
         limit: 10,
         partialize: (state) => {
-          // (โค้ด partialize เดิมของคุณ)
-          const { customer, rooms, discount, ...rest } = state;
-          const { customer_card_open, ...restCustomer } = customer;
-          const stableRooms = rooms.map(({ is_open, ...restRoom }) => restRoom);
-          return { customer: restCustomer, rooms: stableRooms, discount };
+          // return stable primitives only to avoid selectors seeing new objects
+          const stableRooms = state.rooms.map((r) => {
+            // only persist essential fields of room/items to keep shape stable
+            return {
+              id: r.id,
+              room_name: r.room_name,
+              is_suspended: r.is_suspended,
+              // keep items but map minimal fields to avoid frequent object churn
+              items: r.items.map((it) => ({ id: it.id, type: it.type, is_suspended: it.is_suspended })),
+            };
+          });
+          return {
+            // persist flat customer primitives
+            customer_name: state.customer_name,
+            customer_phone: state.customer_phone,
+            customer_address: state.customer_address,
+            customer_card_open: state.customer_card_open,
+            rooms: stableRooms,
+            discount: state.discount,
+          };
         },
       }
     )
