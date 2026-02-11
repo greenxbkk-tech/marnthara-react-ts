@@ -1,14 +1,14 @@
 // src/components/layout/AppFooter.tsx
-// [UPDATED] เชื่อมปุ่ม 'นำทางด่วน' กับ QuickNavModal และแก้ปัญหา infinite re-render
+// [FIXED] แก้ไข Loop นรกขั้นเด็ดขาด (Atomic Selection)
+
 import React from 'react';
 import { useAppStore } from '../../store/store';
 import { useUIStore } from '../../store/uiStore';
-import { CALC } from '../../lib/calculations';
 import { fmtTH } from '../../lib/utils';
 import { Compass } from 'phosphor-react';
-import { shallow } from 'zustand/shallow';
+// [REMOVED] ไม่ต้องใช้ shallow หรือ CALC ที่นี่อีกต่อไป
 
-// QuickNav button component (uses uiStore action)
+// (QuickNavButton ... ไม่เปลี่ยนแปลง)
 const QuickNavButton: React.FC = () => {
   const openQuickNavModal = useUIStore((state) => state.openQuickNavModal);
   return (
@@ -24,13 +24,13 @@ const QuickNavButton: React.FC = () => {
 };
 
 export const AppFooter: React.FC = () => {
-  // IMPORTANT:
-  // - Move derived calculation into the selector so zustand caches getSnapshot properly.
-  // - Use shallow equality to avoid re-render when numeric totals don't change.
-  const { subTotal, discountAmount, grandTotal } = useAppStore(
-    (state) => CALC.calculateSummaryTotals(state.rooms, state.discount),
-    shallow
-  );
+  // [FIXED]
+  // นี่คือวิธีแก้ที่ "ทนทาน" ที่สุด:
+  // ดึงค่า Primitive (ตัวเลข) ทีละตัวโดยตรง
+  // การเลือก (select) แบบนี้จะ "นิ่ง" และ "เสถียร" เสมอ
+  const subTotal = useAppStore((state) => state.subTotal);
+  const discountAmount = useAppStore((state) => state.discountAmount);
+  const grandTotal = useAppStore((state) => state.grandTotal);
 
   const openDiscountModal = useUIStore((state) => state.openDiscountModal);
 

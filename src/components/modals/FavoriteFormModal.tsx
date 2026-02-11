@@ -1,5 +1,5 @@
 // src/components/modals/FavoriteFormModal.tsx
-// [NEW] Modal ฟอร์ม (ใช้ซ้ำ) สำหรับ 'เพิ่ม' และ 'แก้ไข' Favorite
+// [FIXED] แก้ไข Loop นรก (Atomic Selection)
 
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../../store/store';
@@ -17,10 +17,12 @@ export const FavoriteFormModal: React.FC<FavoriteFormModalProps> = ({
   onClose,
 }) => {
   // --- State & Stores ---
-  const { favFormModalContext } = useUIStore();
-  const { addFavorite } = useAppStore((state) => ({
-    addFavorite: state.addFavorite,
-  }));
+  
+  // [FIXED] 1. ดึงค่าจาก uiStore แบบ Atomic
+  const favFormModalContext = useUIStore((state) => state.favFormModalContext);
+  
+  // [FIXED] 2. ดึง Action จาก appStore แบบ Atomic
+  const addFavorite = useAppStore((state) => state.addFavorite);
 
   // [NEW] Local state สำหรับฟอร์ม
   const [code, setCode] = useState('');
@@ -30,6 +32,7 @@ export const FavoriteFormModal: React.FC<FavoriteFormModalProps> = ({
   const isEditMode = context?.mode === 'edit';
 
   // [NEW] เมื่อ Modal เปิด (หรือ Context เปลี่ยน) ให้ตั้งค่าฟอร์ม
+  // (Dependencies 'isOpen' และ 'context' ตอนนี้ "นิ่ง" และปลอดภัยแล้ว)
   useEffect(() => {
     if (isOpen && context) {
       setCode(context.mode === 'edit' ? context.code || '' : '');

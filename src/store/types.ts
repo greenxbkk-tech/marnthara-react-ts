@@ -1,6 +1,7 @@
 // src/store/types.ts
 // [NEW] ไฟล์นิยาม Type/Interface กลางสำหรับโปรเจกต์ (TypeScript)
 // สังเคราะห์จากโครงสร้างข้อมูลใน storage.js (buildPayload)
+// [FIXED] อัปเดต Type ให้ตรงกับ store.ts
 
 // --- Base Types ---
 
@@ -129,6 +130,7 @@ export interface RoomData {
 
 /**
  * โครงสร้างข้อมูลหลัก (Payload) ที่ใช้บันทึกและเป็น State หลักของแอป
+ * [FIXED] แก้ไข Customer ให้ตรงกับที่ store.ts คาดหวัง (loadState)
  */
 export interface AppPayload {
   app_version: string;
@@ -143,10 +145,60 @@ export interface AppPayload {
 
 // --- สำหรับ Zustand Store ---
 
-export interface AppState extends AppPayload {
-  // Actions (จะถูกนิยามใน store.ts)
-  // ตัวอย่าง:
-  // addRoom: () => void;
-  // updateItem: (roomId: string, itemId: string, data: Partial<ItemData>) => void;
-  // ... etc.
+/**
+ * [NEW] โครงสร้าง State ภายในของ Zustand (ที่ใช้ nested customer)
+ */
+export interface AppStateInternal {
+  app_version: string;
+  customer: CustomerData; // [FIXED] ใช้แบบ nested
+  discount: DiscountData;
+  rooms: RoomData[];
+  favorites: FavoritesData;
+  
+  // "ไวท์บอร์ด" (Transient State)
+  subTotal: number;
+  discountAmount: number;
+  grandTotal: number;
 }
+
+/**
+ * [NEW] Actions ทั้งหมดที่นิยามใน store.ts
+ */
+export interface AppActions {
+  _recalculateTotals: () => void;
+  
+  // Customer
+  updateCustomer: (field: keyof CustomerData, value: string | boolean) => void;
+  toggleCustomerCard: () => void;
+  
+  // Room
+  addRoom: () => void;
+  updateRoomName: (roomId: string, newName: string) => void;
+  toggleRoomOpen: (roomId: string) => void;
+  toggleRoomSuspended: (roomId: string) => void;
+  deleteRoom: (roomId: string) => void;
+  
+  // Item
+  addItem: (roomId: string, type: ItemType) => void;
+  updateItem: (roomId: string, itemId: string, data: Partial<ItemData>) => void;
+  deleteItem: (roomId: string, itemId: string) => void;
+  duplicateItem: (roomId: string, itemId: string) => void;
+  changeItemType: (roomId: string, itemId: string, newType: ItemType) => void;
+
+  // Discount
+  updateDiscount: (newDiscount: DiscountData) => void;
+
+  // Favorites
+  addFavorite: (type: keyof FavoritesData, code: string, price: number) => void;
+  deleteFavorite: (type: keyof FavoritesData, code: string) => void;
+
+  // Data I/O
+  loadState: (payload: AppPayload) => void;
+  importFavorites: (favorites: FavoritesData) => void;
+  resetState: () => void;
+}
+
+/**
+ * [NEW] Type สมบูรณ์สำหรับ Store (State + Actions) ที่ store.ts เรียกหา
+ */
+export type FullAppState = AppStateInternal & AppActions;
